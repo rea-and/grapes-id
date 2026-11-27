@@ -9,8 +9,8 @@
 //
 // Most providers want port 587 (STARTTLS) or 465 (TLS) and an app-specific password or API key as the password.
 // The sender address must be one the provider lets you send from (a verified domain or sender).
-import readline from 'node:readline'
 import { client, die, parseArgs } from './lib.mjs'
+import { askHidden } from './prompt.mjs'
 
 const args = parseArgs()
 const { api } = client({ url: args.get('grapesid-url') })
@@ -31,10 +31,7 @@ if (!/^[a-z0-9.-]+:\d+$/i.test(String(host))) die('--host must look like smtp.ex
 async function readPassword() {
   if (process.env.SMTP_PASSWORD) return process.env.SMTP_PASSWORD
   if (!process.stdin.isTTY) die('set SMTP_PASSWORD, or run this in a terminal to type the password at a hidden prompt')
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true })
-  rl._writeToOutput = (s) => { if (s.includes('\n')) process.stdout.write('\n') }
-  process.stdout.write('SMTP password (hidden): ')
-  return new Promise((ok) => rl.question('', (a) => { rl.close(); ok(a) }))
+  return askHidden('SMTP password (typing is hidden, press Enter when done): ')
 }
 const password = await readPassword()
 if (!password) die('empty password')
