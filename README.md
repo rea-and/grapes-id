@@ -87,6 +87,10 @@ After the switch:
 - **Passwords and profiles** are managed in GrapesID. Ignite's account menu links there.
 - **Sign-out** signs out of GrapesID as well.
 
+## Sign-in branding
+
+The sign-in pages carry the GrapesID look (logo, glass card, light and dark). It is installed by `deploy/brand.sh`, which runs after every `./deploy.sh`; see [`branding/`](branding/README.md) to change or switch it off (`./deploy.sh --brand`, `deploy/brand.sh --remove`).
+
 ## Notes
 
 - **Signing in:** people sign in with their plain username (`reaand`), not `reaand@grapes.<domain>`. Self sign-up is off (`GRAPESID_ALLOW_SIGNUP=false`). That setting only applies on the first start; after that, change it in the console under *Default settings → Login behavior*.

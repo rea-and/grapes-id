@@ -8,6 +8,7 @@
 #   ./deploy.sh --no-pull             restart with the current files (e.g. after editing .env or docker-compose.yml)
 #   ./deploy.sh --setup <domain> --no-https    skip certbot (you manage certificates yourself)
 #   ./deploy.sh --status              show containers and health
+#   ./deploy.sh --brand               (re)install the sign-in branding only (also runs after every normal deploy)
 #
 # To upgrade Zitadel, change ZITADEL_VERSION in .env and run ./deploy.sh. Data lives in Docker volumes
 # (grapesid_pgdata, grapesid_bootstrap); deploys never delete them. Secrets live in .env and secrets/ (both private).
@@ -19,7 +20,7 @@ SITE="/etc/apache2/sites-available/$SITE_NAME.conf"
 SSL_SITE="/etc/apache2/sites-available/$SITE_NAME-le-ssl.conf"
 
 DEFAULT_DOMAIN=account.carlevato.net
-SETUP=0; DOMAIN=""; PULL=1; HTTPS=1; ADMIN_EMAIL=""; STATUS=0
+SETUP=0; DOMAIN=""; PULL=1; HTTPS=1; ADMIN_EMAIL=""; STATUS=0; BRAND_ONLY=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --setup) SETUP=1; if [[ -n "${2:-}" && "$2" != -* ]]; then DOMAIN="$2"; shift; fi ;;
@@ -27,7 +28,8 @@ while [[ $# -gt 0 ]]; do
     --no-pull) PULL=0 ;;
     --no-https) HTTPS=0 ;;
     --status) STATUS=1 ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    --brand) BRAND_ONLY=1 ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) printf 'deploy: unknown option %s (see --help)\n' "$1" >&2; exit 2 ;;
   esac
   shift
@@ -38,6 +40,7 @@ die() { printf 'deploy: %s\n' "$*" >&2; exit 1; }
 envget() { grep -E "^$1=" .env 2>/dev/null | tail -n1 | cut -d= -f2- | sed -E 's/^"(.*)"$/\1/' || true; }
 
 if [[ $STATUS == 1 ]]; then docker compose ps; exit 0; fi
+if [[ $BRAND_ONLY == 1 ]]; then exec deploy/brand.sh; fi
 
 # ---------------------------------------------------------------- preflight
 [[ "$(uname -s)" == Linux ]] || die "run this on the Ubuntu server, not on your laptop"
@@ -173,6 +176,11 @@ ISSUER="$(curl -fsS -H "Host: $DOMAIN" -H "X-Forwarded-Proto: https" "http://127
   | sed -nE 's/.*"issuer":"([^"]+)".*/\1/p' || true)"
 [[ "$ISSUER" == "https://$DOMAIN" ]] || die "unexpected OIDC issuer '$ISSUER' (expected https://$DOMAIN). See: docker compose logs zitadel"
 echo "GrapesID is up: issuer $ISSUER"
+
+# ---------------------------------------------------------------- sign-in branding (idempotent; never blocks a deploy)
+if [[ -d branding && -x deploy/brand.sh ]] && command -v apache2ctl >/dev/null; then
+  deploy/brand.sh || echo "warning: the sign-in branding step failed (GrapesID itself is running fine); retry with ./deploy.sh --brand" >&2
+fi
 
 # ---------------------------------------------------------------- HTTPS (first time only)
 if [[ $SETUP == 1 && $HTTPS == 1 ]]; then

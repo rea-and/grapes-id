@@ -74,11 +74,29 @@ export function client({ url, tokenFile } = {}) {
     return json
   }
 
+  /** Multipart file upload (the assets API: logos, icons, fonts). */
+  async function upload(path, file, contentType) {
+    const form = new FormData()
+    form.append('file', new Blob([readFileSync(file)], { type: contentType }), file.split('/').pop())
+    const r = await fetch(`${base}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(local ? { Host: hostHeader, 'X-Forwarded-Proto': scheme, 'X-Forwarded-Host': hostHeader } : {}),
+      },
+      body: form,
+      signal: AbortSignal.timeout(30_000),
+    })
+    const text = await r.text()
+    if (!r.ok) throw Object.assign(new Error(`POST ${path}: HTTP ${r.status} ${text.slice(0, 300)}`), { status: r.status })
+    return text ? JSON.parse(text) : {}
+  }
+
   /** The automation account's own organization (where apps and people live by default). */
   async function myOrgId() {
     const me = await api('GET', '/auth/v1/users/me')
     return me.user?.details?.resourceOwner || die('could not determine the organization of the admin token')
   }
 
-  return { api, myOrgId, publicUrl, env }
+  return { api, upload, myOrgId, publicUrl, env }
 }
