@@ -24,7 +24,7 @@ Apps use standard OpenID Connect: people click "Continue with GrapesID", sign in
 | `scripts/register-app.mjs` | Register an app, print its `GRAPESID_*` settings |
 | `migrations/ignite/` | Move Ignite's accounts into GrapesID **with their existing passwords** and link them |
 | `clients/node/grapesid.js` | Drop-in, zero-dependency OIDC client for Node apps |
-| `docs/connect-an-app.md` | How to connect the next app |
+| `INTEGRATION.md` | How an app (web, browser-only or Android) integrates with GrapesID |
 
 ## Set up (once)
 
