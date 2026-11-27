@@ -87,6 +87,32 @@ After the switch:
 - **Passwords and profiles** are managed in GrapesID. Ignite's account menu links there.
 - **Sign-out** signs out of GrapesID as well.
 
+## Day-to-day administration
+
+**Web console:** https://account.carlevato.net/ui/console. Sign in as `admin` (type just `admin`, not the email address: that address is shared with another account, which makes GrapesID answer "Multiple users found"). Its first password is in `secrets/admin-password.txt`; change it after your first sign-in, then delete the file.
+
+| I want to… | In the console | From the server (this folder) |
+|---|---|---|
+| See who has registered | **Users** | `scripts/users.mjs list` |
+| Look at one person | click them in **Users** | `scripts/users.mjs show <user>` |
+| Block someone (reversible) | their page → **Deactivate** | `scripts/users.mjs deactivate <user>` / `reactivate` |
+| Mark an email as verified | their page → email → **Verify** | `scripts/users.mjs verify-email <user>` |
+| Send a password reset | their page → **Reset password** | `scripts/users.mjs password-reset <user>` |
+| Set a password directly (also admin recovery) | their page → **Set password** | `scripts/users.mjs set-password <user>` |
+| Delete someone for good | their page → **Delete** | `scripts/users.mjs delete <user> --yes` |
+| Add a person yourself | **Users → New** | `scripts/signup.mjs on` lets them do it themselves |
+| See the apps connected to GrapesID | **Projects** (one per app) | `scripts/register-app.mjs` adds or updates one |
+| Stop strangers registering | **Default settings → Login behavior** | `scripts/signup.mjs off` |
+| Change outgoing email | **Default settings → SMTP** | `scripts/smtp.mjs status` / run it again to change |
+
+Notes:
+- `<user>` is a username, an email address, or the id shown by `list`. A person's id is the `sub` that every app stores, so keep a note of it if you ever need to relink an account.
+- **Deleting or deactivating someone in GrapesID does not touch their data inside apps** (an Ignite plan stays on the Ignite server). Deactivation keeps everything and only stops sign-in, so prefer it.
+- People who sign themselves up are named by their email address; people you created or migrated keep their plain username.
+- Each app decides who gets an account in it: an app can stay invite-only while GrapesID sign-up is open (see `INTEGRATION.md`, section 9).
+- If you lose the `admin` password: `scripts/users.mjs set-password admin` on the server, or use "Reset Password" on the sign-in page (email must be working).
+- Logs: `docker compose logs -f zitadel login`.
+
 ## E-mail, sign-up and verified addresses
 
 - **E-mail:** `scripts/smtp.mjs` sets up outgoing mail (verification codes, password resets). `scripts/smtp.mjs status` shows it.

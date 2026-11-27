@@ -7,14 +7,16 @@
 //   scripts/users.mjs reactivate <user>             let them sign in again
 //   scripts/users.mjs verify-email <user>           mark their email address as verified (when they can't receive the code)
 //   scripts/users.mjs password-reset <user>         email them a link to choose a new password (needs scripts/smtp.mjs)
+//   scripts/users.mjs set-password <user>           choose a new password for them right now (typed hidden; use for admin recovery)
 //   scripts/users.mjs delete <user> --yes           delete the account for good (their data inside apps is NOT deleted)
 //
 // <user> is a username, an email address, or the user id shown by `list`. Reads can lag a few seconds behind writes.
 import { client, die, parseArgs } from './lib.mjs'
+import { askHidden } from './prompt.mjs'
 
 const args = parseArgs()
 const [cmd, who] = args.positional
-const COMMANDS = ['list', 'show', 'deactivate', 'reactivate', 'verify-email', 'password-reset', 'delete']
+const COMMANDS = ['list', 'show', 'deactivate', 'reactivate', 'verify-email', 'password-reset', 'set-password', 'delete']
 if (!COMMANDS.includes(cmd)) die(`usage: scripts/users.mjs ${COMMANDS.join('|')} [<user>] [--yes]`)
 const { api } = client({ url: args.get('grapesid-url') })
 
@@ -68,6 +70,13 @@ if (cmd === 'show') {
 } else if (cmd === 'password-reset') {
   await api('POST', `/v2/users/${u.userId}/password_reset`, { sendLink: {} })
   console.log(`Sent a password-reset link to ${email(u)}.`)
+} else if (cmd === 'set-password') {
+  if (!process.stdin.isTTY) die('run this in a terminal: the new password is typed at a hidden prompt')
+  const pw = await askHidden(`New password for ${name(u)} (hidden): `)
+  if (pw.length < 8) die('use at least 8 characters, with upper and lower case, a number and a symbol')
+  if (pw !== (await askHidden('Again: '))) die('the two entries differ; nothing changed')
+  await api('POST', `/v2/users/${u.userId}/password`, { newPassword: { password: pw, changeRequired: false } })
+  console.log(`Password changed for ${name(u)}. Any existing sessions keep working until they expire.`)
 } else if (cmd === 'delete') {
   if (!args.has('yes')) die(`this deletes ${label} for good. Their data inside apps (for example an Ignite plan) stays where it is. Add --yes to go ahead.`)
   await api('DELETE', `/v2/users/${u.userId}`)
