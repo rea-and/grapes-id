@@ -7,8 +7,9 @@
 //
 // Off is the safe default: accounts are created by you in the console (Users) or by migrations.
 // Turning it on means anyone who can reach the sign-in page can register, so also decide which apps hand out a plan
-// to new people (Ignite: ALLOW_REGISTRATION in its .env). Without e-mail (SMTP) configured in the console, GrapesID
-// cannot send verification codes or password-reset links; the script warns about it.
+// to new people (Ignite: ALLOW_REGISTRATION in its .env). Sign-up needs working e-mail (scripts/smtp.mjs) so people
+// can verify their address, and `on` refuses without it unless you pass --force. GrapesID itself lets an unverified
+// account sign in, so each app must check the `email_verified` claim before accepting someone new (Ignite does).
 import { client, die, parseArgs } from './lib.mjs'
 
 const args = parseArgs()
@@ -28,6 +29,7 @@ if (cmd === 'status') {
 
 const want = cmd === 'on'
 if (now === want) { console.log(`Sign-up is already ${want ? 'on' : 'off'}.`); process.exit(0) }
+if (want && !smtp && !args.has('force')) die('refusing to turn sign-up on: e-mail is not set up, so new people could not verify their address. Run scripts/smtp.mjs first (or pass --force if you really mean it).')
 // The update replaces the whole login policy, so send back everything we read with the one change.
 const keep = ['allowUsernamePassword', 'allowExternalIdp', 'forceMfa', 'forceMfaLocalOnly', 'passwordlessType', 'hidePasswordReset',
   'ignoreUnknownUsernames', 'defaultRedirectUri', 'passwordCheckLifetime', 'externalLoginCheckLifetime', 'mfaInitSkipLifetime',
@@ -35,4 +37,4 @@ const keep = ['allowUsernamePassword', 'allowExternalIdp', 'forceMfa', 'forceMfa
 const body = Object.fromEntries(keep.filter((k) => policy[k] !== undefined).map((k) => [k, policy[k]]))
 await api('PUT', '/admin/v1/policies/login', { ...body, allowRegister: want })
 console.log(`Self-service sign-up is now ${want ? 'ON' : 'off'}.`)
-if (want && !smtp) console.log('Note: e-mail (SMTP) is not configured, so new people cannot receive verification codes. Set it up in the console under Default settings > SMTP.')
+if (want && !smtp) console.log('Warning (--force): e-mail is not configured, so new people cannot verify their address.')
