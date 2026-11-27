@@ -1,0 +1,125 @@
+# GrapesID: single sign-on for all apps, built on Zitadel (https://zitadel.com).
+# Managed by ./deploy.sh — values come from .env (created by `./deploy.sh --setup <domain>`).
+#
+#   db       Postgres, private to this compose network
+#   zitadel  the identity server: OIDC, admin console (/ui/console), APIs        -> 127.0.0.1:${GRAPESID_API_PORT}
+#   login    the sign-in pages (Zitadel Login V2, served under /ui/v2/login)      -> 127.0.0.1:${GRAPESID_LOGIN_PORT}
+# Apache publishes both on https://${GRAPESID_DOMAIN} (deploy/apache-grapesid.conf).
+#
+# Settings marked "first start only" are applied when the instance is created and are then changed in the console.
+name: grapesid
+
+services:
+  db:
+    image: postgres:${POSTGRES_VERSION:-17.10-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: zitadel
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d zitadel"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  zitadel:
+    image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:-v4.20.6}
+    restart: unless-stopped
+    user: "0"
+    # init + setup are idempotent: they create the instance on the first start and run migrations after upgrades.
+    command: start-from-init --masterkeyFromEnv
+    environment:
+      ZITADEL_MASTERKEY: ${GRAPESID_MASTERKEY:?set in .env}
+      ZITADEL_PORT: 8080
+      ZITADEL_TLS_ENABLED: "false"
+      ZITADEL_EXTERNALDOMAIN: ${GRAPESID_DOMAIN:?set in .env}
+      ZITADEL_EXTERNALPORT: ${GRAPESID_EXTERNAL_PORT:-443}
+      ZITADEL_EXTERNALSECURE: ${GRAPESID_EXTERNAL_SECURE:-true}
+      ZITADEL_DATABASE_POSTGRES_DSN: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/zitadel?sslmode=disable
+
+      # Accept the scrypt hashes imported from apps like Ignite; each is upgraded to bcrypt at that user's next sign-in.
+      ZITADEL_SYSTEMDEFAULTS_PASSWORDHASHER_VERIFIERS: scrypt
+
+      # ---- first start only: the instance, its organization and the two admin accounts ----
+      ZITADEL_FIRSTINSTANCE_INSTANCENAME: GrapesID
+      ZITADEL_FIRSTINSTANCE_DEFAULTLANGUAGE: en
+      ZITADEL_FIRSTINSTANCE_ORG_NAME: ${GRAPESID_ORG_NAME:-Grapes}
+      # You, as a person: signs in to the console
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: ${GRAPESID_ADMIN_USERNAME:-admin}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_FIRSTNAME: GrapesID
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_LASTNAME: Admin
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS: ${GRAPESID_ADMIN_EMAIL:?set in .env}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED: "true"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: ${GRAPESID_ADMIN_PASSWORD:?set in .env}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: "false"
+      # The scripts in ./scripts and ./migrations: an instance-owner service account whose token lands in secrets/admin.pat
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: grapesid-automation
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: GrapesID automation (deploy scripts)
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "2099-01-01T00:00:00Z"
+      ZITADEL_FIRSTINSTANCE_PATPATH: /zitadel/bootstrap/admin.pat
+      # The login pages' own service account
+      ZITADEL_FIRSTINSTANCE_LOGINCLIENTPATPATH: /zitadel/bootstrap/login-client.pat
+      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_USERNAME: login-client
+      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_NAME: GrapesID login pages
+      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_PAT_EXPIRATIONDATE: "2099-01-01T00:00:00Z"
+
+      # ---- first start only: sign-in behaviour and look ----
+      # People sign in with their plain username ("andi"), not "andi@grapes.<domain>".
+      ZITADEL_DEFAULTINSTANCE_DOMAINPOLICY_USERLOGINMUSTBEDOMAIN: "false"
+      ZITADEL_DEFAULTINSTANCE_LABELPOLICY_HIDELOGINNAMESUFFIX: "true"
+      # Accounts are created by you (console) or by migrations; flip to true to let anyone sign up.
+      ZITADEL_DEFAULTINSTANCE_LOGINPOLICY_ALLOWREGISTER: ${GRAPESID_ALLOW_SIGNUP:-false}
+      ZITADEL_DEFAULTINSTANCE_LABELPOLICY_PRIMARYCOLOR: "#7b3fa8"
+      ZITADEL_DEFAULTINSTANCE_LABELPOLICY_PRIMARYCOLORDARK: "#b98ee0"
+      ZITADEL_DEFAULTINSTANCE_LABELPOLICY_DISABLEWATERMARK: "true"
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "true"
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI: ${GRAPESID_PUBLIC_URL}/ui/v2/login/
+      ZITADEL_OIDC_DEFAULTLOGINURLV2: ${GRAPESID_PUBLIC_URL}/ui/v2/login/login?authRequest=
+      ZITADEL_OIDC_DEFAULTLOGOUTURLV2: ${GRAPESID_PUBLIC_URL}/ui/v2/login/logout?post_logout_redirect=
+      ZITADEL_SAML_DEFAULTLOGINURLV2: ${GRAPESID_PUBLIC_URL}/ui/v2/login/login?samlRequest=
+    ports:
+      - "127.0.0.1:${GRAPESID_API_PORT:-8180}:8080"
+    volumes:
+      - bootstrap:/zitadel/bootstrap:rw
+    healthcheck:
+      test: ["CMD", "/app/zitadel", "ready"]
+      interval: 10s
+      timeout: 30s
+      retries: 12
+      start_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  login:
+    image: ghcr.io/zitadel/zitadel-login:${ZITADEL_VERSION:-v4.20.6}
+    restart: unless-stopped
+    user: "0"
+    environment:
+      ZITADEL_API_URL: http://zitadel:8080
+      NEXT_PUBLIC_BASE_PATH: /ui/v2/login
+      ZITADEL_SERVICE_USER_TOKEN_FILE: /zitadel/bootstrap/login-client.pat
+      ZITADEL_SESSION_COOKIE_SECRET: ${GRAPESID_LOGIN_COOKIE_SECRET:?set in .env}
+      # The login talks to Zitadel inside Docker, but must name the public instance it serves.
+      CUSTOM_REQUEST_HEADERS: Host:${GRAPESID_HOST:-${GRAPESID_DOMAIN}},X-Forwarded-Proto:${GRAPESID_SCHEME:-https}
+    ports:
+      - "127.0.0.1:${GRAPESID_LOGIN_PORT:-8181}:3000"
+    volumes:
+      - bootstrap:/zitadel/bootstrap:ro
+    healthcheck:
+      test: ["CMD", "/bin/sh", "-c", "node /app/healthcheck.mjs http://localhost:3000/ui/v2/login/healthy"]
+      interval: 10s
+      timeout: 30s
+      retries: 12
+      start_period: 20s
+    depends_on:
+      zitadel:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  bootstrap:
