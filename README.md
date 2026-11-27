@@ -87,6 +87,13 @@ After the switch:
 - **Passwords and profiles** are managed in GrapesID. Ignite's account menu links there.
 - **Sign-out** signs out of GrapesID as well.
 
+## E-mail, sign-up and verified addresses
+
+- **E-mail:** `scripts/smtp.mjs` sets up outgoing mail (verification codes, password resets). `scripts/smtp.mjs status` shows it.
+- **Sign-up:** `scripts/signup.mjs on|off` lets people create their own account. It refuses to turn on without working e-mail. After switching it, the sign-in pages can take a minute to notice.
+- **Verified addresses:** the sign-in pages require one (`EMAIL_VERIFICATION` in `docker-compose.yml`): someone with an unverified address is sent a code and must enter it before the sign-in completes. Accounts you create in the console or migrate need `isVerified` set (the Ignite migration does this when you pass `--email user=address`), otherwise those people are asked to verify once as well.
+- Apps should still check the `email_verified` claim before accepting a new person (Ignite does).
+
 ## Sign-in branding
 
 The sign-in pages carry the GrapesID look (logo, glass card, light and dark). It is installed by `deploy/brand.sh`, which runs after every `./deploy.sh`; see [`branding/`](branding/README.md) to change or switch it off (`./deploy.sh --brand`, `deploy/brand.sh --remove`).

@@ -104,6 +104,10 @@ services:
       NEXT_PUBLIC_BASE_PATH: /ui/v2/login
       ZITADEL_SERVICE_USER_TOKEN_FILE: /zitadel/bootstrap/login-client.pat
       ZITADEL_SESSION_COOKIE_SECRET: ${GRAPESID_LOGIN_COOKIE_SECRET:?set in .env}
+      # Make the sign-in pages require a verified e-mail address: an unverified person is sent a code and shown the
+      # verify page before the sign-in completes. Needs working e-mail (scripts/smtp.mjs). Without this, GrapesID lets
+      # unverified accounts straight through and only the apps' own checks stop them.
+      EMAIL_VERIFICATION: "true"
       # The login talks to Zitadel inside Docker, but must name the public instance it serves.
       CUSTOM_REQUEST_HEADERS: Host:${GRAPESID_HOST:-${GRAPESID_DOMAIN}},X-Forwarded-Proto:${GRAPESID_SCHEME:-https}
     ports:
