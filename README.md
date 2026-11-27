@@ -25,6 +25,7 @@ Apps use standard OpenID Connect: people click "Continue with GrapesID", sign in
 | `migrations/ignite/` | Move Ignite's accounts into GrapesID **with their existing passwords** and link them |
 | `clients/node/grapesid.js` | Drop-in, zero-dependency OIDC client for Node apps |
 | `INTEGRATION.md` | How an app (web, browser-only or Android) integrates with GrapesID |
+| `USR_MNGMNT.md` | Everything about people: how they join, sign in, are managed, and what apps keep; runbooks and known gaps |
 
 ## Set up (once)
 
@@ -88,6 +89,8 @@ After the switch:
 - **Sign-out** signs out of GrapesID as well.
 
 ## Day-to-day administration
+
+The full picture (lifecycle, runbooks, privacy, known gaps) is in [`USR_MNGMNT.md`](USR_MNGMNT.md). The short version:
 
 **Web console:** https://account.carlevato.net/ui/console. Sign in as `admin` (type just `admin`, not the email address: that address is shared with another account, which makes GrapesID answer "Multiple users found"). Its first password is in `secrets/admin-password.txt`; change it after your first sign-in, then delete the file.
 
