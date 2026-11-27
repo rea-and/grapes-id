@@ -46,6 +46,7 @@ if (cmd === 'list') {
   process.exit(0)
 }
 
+try {
 const u = await find(who)
 const label = `${name(u)} <${email(u)}>`
 if (cmd === 'show') {
@@ -58,7 +59,11 @@ if (cmd === 'show') {
   await api('POST', `/v2/users/${u.userId}/reactivate`, {})
   console.log(`Reactivated ${label}.`)
 } else if (cmd === 'verify-email') {
-  await api('POST', `/v2/users/${u.userId}/email`, { email: email(u), isVerified: true })
+  if (u.human?.email?.isVerified) die(`${email(u)} is already verified`)
+  // Ask GrapesID for a verification code without emailing it, then confirm it ourselves.
+  const { verificationCode } = await api('POST', `/v2/users/${u.userId}/email/resend`, { returnCode: {} })
+  if (!verificationCode) die('GrapesID did not return a verification code')
+  await api('POST', `/v2/users/${u.userId}/email/verify`, { verificationCode })
   console.log(`Marked ${email(u)} as verified for ${name(u)}.`)
 } else if (cmd === 'password-reset') {
   await api('POST', `/v2/users/${u.userId}/password_reset`, { sendLink: {} })
@@ -68,3 +73,4 @@ if (cmd === 'show') {
   await api('DELETE', `/v2/users/${u.userId}`)
   console.log(`Deleted ${label}.`)
 }
+} catch (e) { die(e.message) }
